@@ -49,16 +49,31 @@ namespace NoSLoofah.Animation
             v2positions = new Vector2[posCount];
             realPOffset = p1Offset;
             reverseTimer = 0;
+            setInAirTimer = 0;
+            moveTimeTTimer = 0;
             targetPos = endPos.position;
             lastTouchedPos = transform.position;
             footOnGround = false;
-            inAir = true;
+            SetInAir();
         }
         private void Update()
         {
             DetectTouchGround();
             SetVisualFoot();
+            //滞空动画，单拉一个函数
+            if (inAir) WhenInAir();
             if (moveTimeTTimer < moveTimeThreshold) moveTimeTTimer += Time.deltaTime;
+            if (setInAirTimer < setInAirThrehold) setInAirTimer += Time.deltaTime;
+        }
+        [Tooltip("两次滞空位置改变的最短时间间隔")] [SerializeField] private float setInAirThrehold;
+        private float setInAirTimer = 0;
+        private void WhenInAir()
+        {
+            if (!(setInAirTimer >= setInAirThrehold)) return;
+            Debug.Log("air anim");
+            targetPos = (Vector2)airRefPos.position + Tool.GetRandomDir(inAirDistance);
+            MoveToPoint(false);
+            setInAirTimer = 0;
         }
         #region 触手检测和绘制
         /// <summary>
@@ -148,18 +163,17 @@ namespace NoSLoofah.Animation
         /// </summary>
         public void SetInAir()
         {
-            //TODO: bugPoint
-            targetPos = (Vector2)airRefPos.position + Tool.GetRandomDir(inAirDistance);
+            if (inAir) return;
+            targetPos = (Vector2)airRefPos.position;
             lastTouchedPos = endPos.position;
+            setInAirTimer = 0;
+            Debug.Log("setinAir");
             inAir = true;
             endPos.SetParent(transform);
         }
         /// <summary>
         /// 评估最优落足点。若没有任何落足点，则在空中寻找随机点
         /// 评分越低越优质
-        /// 最优落足点的判定条件：
-        ///     1. 与其他触手的距离        
-        ///     2. 应该是与指向参考点方向角度最小的点
         /// </summary>
         /// <param name="points">潜在落足点</param>    
         public void EvaluatePoints(ref List<Vector2> points, float centerX)
@@ -181,6 +195,9 @@ namespace NoSLoofah.Animation
             float score = float.MaxValue;
             float c = 0;
             float angle;
+
+            //候选着地点评分逻辑
+            //可以根据需要修改优化
             foreach (var p in points)
             {
                 angle = Vector2.Angle(refPos.position - transform.position, p - (Vector2)transform.position);
@@ -214,7 +231,8 @@ namespace NoSLoofah.Animation
         /// <summary>
         /// 将足末端按贝塞尔曲线轨迹移动到目标点
         /// </summary>
-        public void MoveToPoint()
+        /// <param name="curve">是否使用贝塞尔曲线的轨迹移动</param>
+        public void MoveToPoint(bool curve)
         {
             if (moveTimeTTimer < moveTimeThreshold) return;
             moveTimeTTimer = 0;
@@ -223,11 +241,18 @@ namespace NoSLoofah.Animation
                 footTweenr.Kill();
             }
             int flag = (targetPos.y >= transform.position.y) ? -1 : 1;
-            //移动的贝塞尔曲线参考点
-            moveVector = Vector2.Lerp(endPos.position, targetPos, movePPos) + Vector2.up * movePosOffset * flag;
-            //足缓动对象
-            footTweenr = DOTween.To(() => 0f, t => endPos.position = Tool.CalculateBezierPoint(endPos.position, moveVector, targetPos, t)
-            , 1f, moveFootTime).SetEase(Ease.Linear);
+            if (curve)
+            {
+                //移动的贝塞尔曲线参考点
+                moveVector = Vector2.Lerp(endPos.position, targetPos, movePPos) + Vector2.up * movePosOffset * flag;
+                //足缓动对象
+                footTweenr = DOTween.To(() => 0f, t => endPos.position = Tool.CalculateBezierPoint(endPos.position, moveVector, targetPos, t)
+                , 1f, moveFootTime).SetEase(Ease.Linear);
+            }
+            else
+            {
+                footTweenr = footTweenr = endPos.DOMove(targetPos, moveFootTime).SetEase(Ease.Linear);
+            }
             footTweenr.onComplete += OnTouchGround;
             footTweenr.Play();
         }

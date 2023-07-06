@@ -9,7 +9,6 @@ namespace NoSLoofah.Animation
         [Tooltip("触手根部位置")] [SerializeField] private Transform feetRoot;
         [Tooltip("触手着地点检测线数量")] [Range(1, 20)] [SerializeField] private int detectorCount;
         [Tooltip("触手着地点检测线长度")] [SerializeField] private float detectorLength;
-        [Tooltip("触手尝试移动需要的距离")] [SerializeField] private float changeFootLength;
         [Tooltip("触手允许落的层级")] [SerializeField] private LayerMask ground;
         private Tentacle[] tentacles;               //触手对象
         private Transform[] footPos;                //触手着地点
@@ -62,7 +61,7 @@ namespace NoSLoofah.Animation
             {
                 tentacles[i] = feetRoot.GetChild(i).GetComponent<Tentacle>();
                 footPos[i] = tentacles[i].EndPos;
-                tentacles[i].InitialFoot(changeFootLength);
+                tentacles[i].InitialFoot(detectorLength);
             }
         }
         private void Update()
@@ -112,10 +111,11 @@ namespace NoSLoofah.Animation
             groundedFootCount = 0;
             foreach (var t in tentacles)
             {
+                //着地时突然撤销地面会不能恢复
                 if (t.NeedStep())
                 {
                     t.EvaluatePoints(ref points, GravityCenterX);
-                    t.MoveToPoint();
+                    t.MoveToPoint(points.Count > 0);
                 }
                 else if (t.FootOnGround)
                 {
